@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>フリマウォッチ 通知操作</title>
+</head>
+<body style="font-family:sans-serif;padding:28px;line-height:1.7;max-width:680px;">
+<h2 id="msg">処理中…</h2>
+<p id="detail" style="color:#666;font-size:13px;word-break:break-all;"></p>
+<p style="color:#888;font-size:11px;margin-top:24px;">このタブは閉じてOKです（数秒でシートに反映されます）</p>
+<script>
+/*
+ 2026-06-18 (Harada「シークレット無しでボタンを直せ」): Apps Script の /exec を直接クリックすると
+ 原田の多アカウント Chrome で Google が account router(accounts?authuser) を挟み doGet 到達前に失敗する。
+ 本ページ(github.io = 非 Google ドメイン)は account router を発生させず、 ここから
+ fetch(..., {credentials:'omit'}) = Cookie を送らない匿名リクエストで Apps Script を叩くため、
+ ブラウザのログイン状態に一切依存せず確実に実行される(匿名アクセスは検証済で正常動作)。
+*/
+var APP = {
+  h: "https://script.google.com/macros/s/AKfycbwUkXDP-viXKHzAX1Qwxa7nSFJgxckVJWjUjlye8MUHDAdAU1qjylWpFF1C9cNFNsglnQ/exec",
+  s: "https://script.google.com/macros/s/AKfycbysUh7xw5399VYOycK8hGfcMB7yCZ10YL0gctIUycYx89rN5MUNfyMZxMzdNdskUTG4dQ/exec",
+  d: "https://script.google.com/macros/s/AKfycbzonJPoOEHC6T1m8mL5_a_6BrNP6ssIJOvnLwJLjeVodRIH2HZ3APs4rqxfzrJFZ6JzSA/exec"
+};
+var p = new URLSearchParams(location.search);
+var g = (p.get("g") || "").toLowerCase();
+var q = p.get("q") || "";        // 行削除 / 画像検索切替 / 除外
+var t = p.get("t") || "";        // title
+var ts = p.get("ts") || "一覧";   // sheet 名
+var u = p.get("u") || "";        // 除外用 item URL
+var base = APP[g];
+function show(m, d) {
+  document.getElementById("msg").textContent = m;
+  document.getElementById("detail").textContent = d || "";
+}
+if (!base || !q) {
+  show("⚠️ リンクのパラメータが不正です", "g=" + g + " q=" + q);
+} else {
+  var url = base + "?query=" + encodeURIComponent(q)
+          + "&title=" + encodeURIComponent(t)
+          + "&ts=" + encodeURIComponent(ts);
+  if (q === "除外") url += "&url=" + encodeURIComponent(u);
+  fetch(url, { method: "GET", mode: "no-cors", credentials: "omit", cache: "no-store" })
+    .then(function () {
+      var label = q === "行削除" ? "✅ 通知を削除しました"
+                : q === "画像検索切替" ? "✅ 画像検索を切り替えました"
+                : "✅ 除外しました（今後この商品は通知に出ません）";
+      show(label, t);
+    })
+    .catch(function (e) { show("🔴 通信エラー（時間をおいて再度クリックしてください）", String(e)); });
+}
+</script>
+</body>
+</html>
