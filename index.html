@@ -40,14 +40,34 @@ if (!base || !q) {
           + "&title=" + encodeURIComponent(t)
           + "&ts=" + encodeURIComponent(ts);
   if (q === "除外") url += "&url=" + encodeURIComponent(u);
-  fetch(url, { method: "GET", mode: "no-cors", credentials: "omit", cache: "no-store" })
-    .then(function () {
-      var label = q === "行削除" ? "✅ 通知を削除しました"
-                : q === "画像検索切替" ? "✅ 画像検索を切り替えました"
-                : "✅ 除外しました（今後この商品は通知に出ません）";
-      show(label, t);
-    })
-    .catch(function (e) { show("🔴 通信エラー（時間をおいて再度クリックしてください）", String(e)); });
+  /*
+   2026-07-19 hardening (「押したのに消えない」= click が GAS に届かず無反応の incident 根治):
+   ① keepalive:true = タブを閉じて/遷移してもリクエストを中断させない (fetch が破棄されると
+      GAS に届かず無反応になる。 no-cors GET でも keepalive でページ unload をまたいで送信完了する)。
+   ② 失敗時 1 回だけ自動リトライ (瞬断/一時ブロック対策)。
+   ③ 文言を「削除しました」→「削除リクエストを送信しました（数秒後に反映）」に是正。
+      no-cors では GAS の応答内容を JS から読めない = 実際に処理されたか確認できないため、
+      「削除完了」と断言するのは誤り。 完了を断言すると「成功表示なのに消えない」混乱の元 (本 incident)。
+  */
+  function done() {
+    var label = q === "行削除" ? "✅ 削除リクエストを送信しました（数秒後にシートへ反映されます）"
+              : q === "画像検索切替" ? "✅ 画像検索の切り替えを送信しました（数秒後に反映されます）"
+              : "✅ 除外を送信しました（今後この商品は通知に出ません）";
+    show(label, t);
+  }
+  function fire() {
+    return fetch(url, { method: "GET", mode: "no-cors", credentials: "omit",
+                        cache: "no-store", keepalive: true });
+  }
+  fire()
+    .then(done)
+    .catch(function () {
+      setTimeout(function () {
+        fire().then(done).catch(function (e) {
+          show("🔴 通信エラー（時間をおいて再度クリックしてください）", String(e));
+        });
+      }, 1500);
+    });
 }
 </script>
 </body>
