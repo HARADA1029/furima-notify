@@ -40,6 +40,34 @@ if (!base || !q) {
           + "&title=" + encodeURIComponent(t)
           + "&ts=" + encodeURIComponent(ts);
   if (q === "除外") url += "&url=" + encodeURIComponent(u);
+
+  /*
+   2026-07-22 削除リクエスト監査 + HDC 自動修復の起点 (Harada「ログに残す/消えてなければHDC削除/エラー検知」):
+   no-cors では応答を読めない = このページはクリックが GAS に届いたか確認できない。 そこで primary 処理とは別に、
+   HDC が clasp/SA で唯一握れる H スプシへ「削除を要求した事実」を監査ビーコンとして必ず 1 発残す。
+   S/D の GAS には操作ログが無く監視不能なので、 全 group を H スプシ「削除リクエスト監査」tab に集約する。
+   → HDC 日次 reconcile が sa_{group} で実シートを突合し、 未削除なら自動削除 + Chatwork 通知する安全網。
+   reqid は問い合わせ突合用に画面表示する。
+  */
+  function genReqId() {
+    var rnd = Math.random().toString(36).slice(2, 8);
+    return "R" + Date.now().toString(36) + rnd;
+  }
+  var reqid = genReqId();
+  // 監査ビーコンは常に H の Web アプリ (APP.h) へ。 group=g で どの group の削除要求かを記録。
+  var auditUrl = APP.h + "?query=reqlog"
+               + "&reqid=" + encodeURIComponent(reqid)
+               + "&group=" + encodeURIComponent(g)
+               + "&op=" + encodeURIComponent(q)
+               + "&title=" + encodeURIComponent(t)
+               + "&ts=" + encodeURIComponent(ts);
+  function fireAudit() {
+    try {
+      fetch(auditUrl, { method: "GET", mode: "no-cors", credentials: "omit",
+                        cache: "no-store", keepalive: true }).catch(function () {});
+    } catch (e) {}
+  }
+
   /*
    2026-07-19 hardening (「押したのに消えない」= click が GAS に届かず無反応の incident 根治):
    ① keepalive:true = タブを閉じて/遷移してもリクエストを中断させない (fetch が破棄されると
@@ -53,18 +81,20 @@ if (!base || !q) {
     var label = q === "行削除" ? "✅ 削除リクエストを送信しました（数秒後にシートへ反映されます）"
               : q === "画像検索切替" ? "✅ 画像検索の切り替えを送信しました（数秒後に反映されます）"
               : "✅ 除外を送信しました（今後この商品は通知に出ません）";
-    show(label, t);
+    show(label, t + "  ／ 受付ID: " + reqid);
   }
   function fire() {
     return fetch(url, { method: "GET", mode: "no-cors", credentials: "omit",
                         cache: "no-store", keepalive: true });
   }
+  // 監査ビーコンを先に撃つ (primary が click 消失しても監査は残り HDC が自動修復できる)。
+  fireAudit();
   fire()
     .then(done)
     .catch(function () {
       setTimeout(function () {
         fire().then(done).catch(function (e) {
-          show("🔴 通信エラー（時間をおいて再度クリックしてください）", String(e));
+          show("🔴 通信エラー（時間をおいて再度クリックしてください）", String(e) + " ／ 受付ID: " + reqid);
         });
       }, 1500);
     });
