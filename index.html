@@ -17,11 +17,21 @@
  fetch(..., {credentials:'omit'}) = Cookie を送らない匿名リクエストで Apps Script を叩くため、
  ブラウザのログイン状態に一切依存せず確実に実行される(匿名アクセスは検証済で正常動作)。
 */
+/*
+ 2026-07-22 マルチ group ルータ化: S/D の旧 GAS は再現実験 (到達保証の直接発火×3タイトル型) で
+ 全パターン「You do not have permission to access the requested document」= 実行オーナーがシートを
+ 開けず **一次削除が恒久的に全滅** と確定 (タイトル型/エンコードは無関係)。 そのため全 group の
+ 一次処理を H の Web アプリ (clasp 管理・3シート access 実証済み) に &grp=h/s/d 付きで一本化する。
+ 旧 S/D URL は記録用に残すが使用しない (permission-dead)。
+*/
 var APP = {
   h: "https://script.google.com/macros/s/AKfycbwUkXDP-viXKHzAX1Qwxa7nSFJgxckVJWjUjlye8MUHDAdAU1qjylWpFF1C9cNFNsglnQ/exec",
-  s: "https://script.google.com/macros/s/AKfycbysUh7xw5399VYOycK8hGfcMB7yCZ10YL0gctIUycYx89rN5MUNfyMZxMzdNdskUTG4dQ/exec",
-  d: "https://script.google.com/macros/s/AKfycbzonJPoOEHC6T1m8mL5_a_6BrNP6ssIJOvnLwJLjeVodRIH2HZ3APs4rqxfzrJFZ6JzSA/exec"
+  s: "https://script.google.com/macros/s/AKfycbwUkXDP-viXKHzAX1Qwxa7nSFJgxckVJWjUjlye8MUHDAdAU1qjylWpFF1C9cNFNsglnQ/exec",
+  d: "https://script.google.com/macros/s/AKfycbwUkXDP-viXKHzAX1Qwxa7nSFJgxckVJWjUjlye8MUHDAdAU1qjylWpFF1C9cNFNsglnQ/exec"
 };
+// 旧 S/D 直行 URL (permission-dead 2026-07-22 確定、 復旧しても使わないこと):
+//   s: AKfycbysUh7xw5399VYOycK8hGfcMB7yCZ10YL0gctIUycYx89rN5MUNfyMZxMzdNdskUTG4dQ
+//   d: AKfycbzonJPoOEHC6T1m8mL5_a_6BrNP6ssIJOvnLwJLjeVodRIH2HZ3APs4rqxfzrJFZ6JzSA
 var p = new URLSearchParams(location.search);
 var g = (p.get("g") || "").toLowerCase();
 var q = p.get("q") || "";        // 行削除 / 画像検索切替 / 除外
@@ -36,9 +46,11 @@ function show(m, d) {
 if (!base || !q) {
   show("⚠️ リンクのパラメータが不正です", "g=" + g + " q=" + q);
 } else {
+  // grp= で H ルータに処理対象 group を伝える (2026-07-22。 grp 無しは H 扱い = 後方互換)。
   var url = base + "?query=" + encodeURIComponent(q)
           + "&title=" + encodeURIComponent(t)
-          + "&ts=" + encodeURIComponent(ts);
+          + "&ts=" + encodeURIComponent(ts)
+          + "&grp=" + encodeURIComponent(g);
   if (q === "除外") url += "&url=" + encodeURIComponent(u);
 
   /*
