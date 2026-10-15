@@ -1,0 +1,53 @@
+# furima-notify GitHub Pages (relay ページ index.html のみ) を workflow build で配信する。
+#
+# 背景 (2026-10-15 HDCDG・原田 GO): legacy build は main への push ごとに repo 全体 (media/ 837MB・
+# 262 本 = ES 投稿用の画像/動画ホスト) を build していた。ES 投稿の画像は raw.githubusercontent.com
+# から配信され Pages を使わないのに、画像 push 5 連続で build が 4 本 cancel + 1 本 timeout し
+# 失敗メールが原田へ届いていた (run 38594507225)。Pages の 1 GB 上限にも近づいていた。
+#
+# この workflow は media/** の push では起動せず (paths-ignore)、配信物は index.html だけ。
+# 戻し方 (順序厳守): ①この file を削除 (新 workflow を止める) → ②`gh api -X PUT repos/HARADA1029/furima-notify/pages -f build_type=legacy`。
+# 切替時も同じ理由で build_type=workflow を先に設定してからこの file を push した (legacy と新 workflow の二重起動回避)。
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "media/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            index.html
+          sparse-checkout-cone-mode: false
+      - name: Stage relay page only (media/ は配信しない)
+        run: |
+          set -eu
+          test -s index.html
+          mkdir -p _site
+          cp index.html _site/index.html
+          ls -la _site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
